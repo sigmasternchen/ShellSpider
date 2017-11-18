@@ -1,10 +1,8 @@
 #!/bin/bash
 
-statusContainer=$1
-eval "declare -A settings="${2#*=}
-eval "declare -A headers="${3#*=}
+. $1
 
-echo 200 > $statusContainer
+setStatusCode 200
 
 cat <<EOF
 <!DOCTYPE html>
@@ -19,12 +17,18 @@ for key in "${!settings[@]}"; do
 	echo "$key -> ${settings[$key]}<br />"
 done
 cat <<EOF
+		<h1>Server</h1>
+EOF
+for key in "${!server[@]}"; do
+	echo "$key -> ${server[$key]}<br />"
+done
+cat <<EOF
 		<h1>Headers</h1>
 EOF
 for key in "${!headers[@]}"; do
 	echo "$key -> ${headers[$key]}<br />"
 done
-cat << EOF
+cat <<EOF
 	</body>
 </html>
 

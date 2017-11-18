@@ -3,6 +3,14 @@
 settingsfile=$1
 eval "$(cat $settingsfile)" # declare settings array
 
+. misc.sh
+
+declare -A server
+server[remoteAddress]="$SOCAT_PEERADDR"
+server[remotePort]="$SOCAT_PEERPORT"
+server[localAddress]="$SOCAT_SOCKADDR"
+server[localPort]="$SOCAT_SOCKPORT"
+
 declare -A headers
 first=1
 while true; do
@@ -11,29 +19,28 @@ while true; do
 		break
 	fi
 	if test $first = 1; then
-		headers[method]=$(echo "$header" | awk '{ print $1 }')
-		headers[http]=$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')
-		headers[path]=$(echo "$header" | awk '{ print $2 }')
+		server[method]=$(echo "$header" | awk '{ print $1 }')
+		server[http]=$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')
+		server[user_path]=$(echo "$header" | awk '{ print $2 }')
+		server[path]="$(realpath -sm "${server[user_path]}")"
+		server[query]="$(echo "${server[path]}" | awk -F? '{for (i=2; i<=NF; i++) print $i}')"
+		server[path]="$(echo "${server[path]}" | awk -F? '{ print $1 }')"
+		server[real_path]="$(realpath -sm "${settings[home]}${server[path]}")"
 		first=0
 		continue
 	fi
 	headers[$(echo $header | awk -F: '{ print $1}')]="$(echo "$header" | awk '{for (i=2; i<=NF; i++) print $i}')"
 done
 
-rpath="$(realpath -sm "${headers[path]}")"
-headers[query]="$(echo "$rpath" | awk -F? '{for (i=2; i<=NF; i++) print $i}')"
-rpath="$(echo "$rpath" | awk -F? '{ print $1 }')"
-
-path="${settings[home]}${rpath}"
-path="$(realpath -sm "$path")"
-
-urlencode() {
-	python -c "import urllib, sys; print urllib.quote(sys.argv[1])"  "$1"
-}
+if test "$first" = 1; then
+	# wut?
+	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - Error: Malformed HTTP request; ignoring" 1>&2
+	exit 1
+fi
 
 placeholder() {
 	declare -A tokens
-	tokens[path]="$rpath ($path)"
+	tokens[path]="${server[path]} (${server[real_path]})"
 	tokens[host]="${headers[Host]}"
 	tokens[server]="${settings[server]}"
 
@@ -83,45 +90,69 @@ isExecutable() {
 	return 1
 }
 
+baseSource="$(pwd)/base.source.sh"
+
 status=500
 content=""
 declare -A responseHeaders
 responseHeaders[Content-Type]="text/html"
 responseHeaders[Server]="${settings[server]}"
+responseHeaders[Connection]="max=1"
 
+type=""
 
-if test ! -e "$path"; then
+if test ! -e "${server[real_path]}"; then
 	status=404
 
 	content="$(placeholder < ./404.html)"
 
-elif test ${settings[index]} = true -a -d "$path"; then
+	type="-"
+elif test ${settings[index]} = true -a -d "${server[real_path]}"; then
 	container=$(addStatusContainer)
-	content=$(./index.sh "${settings[server]}" "${headers[Host]}" "$rpath" "$path" "$container")
-	status=$(cat $container)
+	content=$(./index.sh $baseSource $container "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
+	status=$(head -n 1 $container)
+	if test "$status" = ""; then
+		status=200
+	fi
+	while read line; do
+		responseHeaders[$(echo $line | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
+        done <<< $(tail -n 1 $container)
+
 	removeStatusContainer $container
 
-elif $(isExecutable $path); then
+	type="index"
+elif $(isExecutable ${server[real_path]}); then
 	container=$(addStatusContainer)
-	pushd "$(dirname $path)" > /dev/null
-	content=$($path $container "$(declare -p settings)" "$(declare -p headers)")
+	pushd "$(dirname ${server[real_path]})" > /dev/null
+	content=$(${server[real_path]} $baseSource $container "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
 	popd > /dev/null
 	status=$(head -n 1 $container)
 	if test "$status" = ""; then
 		status=200
 	fi
        	while read line; do
+		if test "$(echo "$line" | grep ':')" = ""; then
+			continue
+		fi
 		responseHeaders[$(echo $line | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
 	done <<< $(tail -n 1 $container)
 	
 	removeStatusContainer $container
+
+	type="exec"
 else
 	status=200
-	responseHeaders['Content-Type']="$(file -b --mime-type $path)"
-	content=$(cat $path)
+	responseHeaders['Content-Type']="$(file -b --mime-type ${server[real_path]})"
+	content=$(cat ${server[real_path]})
+
+	type="static"
 fi
 
 length=$(printf "%s" "$content" | wc -c)
+
+if test "${settings[verbose]}" -ge "0"; then
+	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - ${headers[Host]}${server[path]} - $type - $status - $length bytes" 1>&2
+fi
 
 echo -en "HTTP/1.1 $status $(./statusString.sh $status)\r\n"
 echo -en "Content-Length: $length\r\n"

@@ -1,12 +1,9 @@
 #!/bin/bash
 
-statusContainer=$1
-eval "declare -A settings="${2#*=}
-eval "declare -A headers="${3#*=}
+. $1
 
-
-if test "${headers[query]}" == ""; then
-	echo 200 > $statusContainer
+if test "${server[query]}" == ""; then
+	setStatusCode 200
 
 	cat<<EOF
 <!DOCTYPE>
@@ -30,7 +27,7 @@ fi
 name=""
 text=""
 
-fields=$(echo ${headers[query]} | tr "&" "\n")
+fields=$(echo ${server[query]} | tr "&" "\n")
 for field in $fields; do
 	key=$(echo $field | awk -F= '{ print $1 }')
 	value=$(echo $field | awk -F= '{for (i=2; i<=NF; i++) print $i}')
@@ -43,18 +40,16 @@ for field in $fields; do
 done
 
 if test "$name" = "" -o "$text" = ""; then
-	echo 400 > $statusContainer
-	echo 400 - Bad Request
+	setStatusCode 400
 	exit
 fi
 
 cat >> ./guestbook.txt <<EOF
 ===============================
-$(date): $(python -c "import urllib, sys; print urllib.unquote_plus(sys.argv[1]).decode('utf8')" "$name")
+$(date): $(urldecode "$name")
 
-$(python -c "import urllib, sys; print urllib.unquote_plus(sys.argv[1]).decode('utf8')"  "$text")
+$(urldecode "$text")
 
 EOF
 
-echo 302 > $statusContainer
-echo "Location: ./guestbook.txt" >> $statusContainer
+redirect "./guestbook.txt"

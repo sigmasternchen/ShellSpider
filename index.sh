@@ -1,21 +1,17 @@
 #!/bin/bash
 
-server="$1"
-host="$2"
-rpath="$3"
-path="$4"
-statuscontainer=$5
+. $1
 
-echo 200 > $statuscontainer
+setStatusCode 200
 
 cat <<EOF
 <!DOCTYPE>
 <html>
 	<head>
-		<title>Index of $rpath</title>
+		<title>Index of ${server[path]}</title>
 	</head>
 	<body>
-		<h1>Index of $rpath</h1>
+		<h1>Index of ${server[path]}</h1>
 		<hr />
 		<table>
 			<tr>
@@ -34,23 +30,23 @@ cat <<EOF
 			</tr>
 EOF
 
-for file in $(ls -a $path); do
-	if test "$file" = ".." -a "$rpath" = "/"; then
+for file in $(ls -a ${server[real_path]}); do
+	if test "$file" = ".." -a "${server[path]}" = "/"; then
 		continue;
 	fi
 	cat <<EOF
 	<tr>
 		<td>
-			<a href="$(realpath -sm "$rpath/$file")">$file</a>
+			<a href="$(realpath -sm "${server[path]}/$file")">$file</a>
 		</td>
 		<td>
-			$(file -b $path/$file)
+			$(file -b ${server[real_path]}/$file)
 		</td>
 		<td>
-			$(if test ! -d $path/$file; then if test -x $path/$file; then echo yes; else echo no; fi; fi)
+			$(if test ! -d ${server[real_path]}/$file; then if test -x ${server[real_path]}/$file; then echo yes; else echo no; fi; fi)
 		</td>
 		<td>
-			$(if test ! -d $path/$file; then du -kh $path/$file | cut -f1; fi)
+			$(if test ! -d ${server[real_path]}/$file; then du -kh ${server[real_path]}/$file | cut -f1; fi)
 		</td>
 	</tr>
 EOF
@@ -59,7 +55,7 @@ done
 cat <<EOF
 			</table>
 		<hr />
-		$host ($server)
+		${headers[Host]} (${settings[server]})
 	</body>
 </html>
 EOF

@@ -1,10 +1,8 @@
 #!/bin/bash
 
-statusContainer=$1
-eval "declare -A settings="${2#*=}
-eval "declare -A headers="${3#*=}
+. $1
 
-echo 200 > $statusContainer
+setStatusCode 200
 
 cat <<EOF
 <!DOCTYPE html>

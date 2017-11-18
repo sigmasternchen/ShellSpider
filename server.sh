@@ -53,7 +53,8 @@ fi
 
 settingsfile="/dev/shm/wserver-$$"
 declare -A settings
-settings[home]=$home
+settings[serverDirectory]="$(pwd)"
+settings[home]="$home"
 settings[verbose]=$verboselevel
 settings[executeable]="sh php py cgi"
 settings[server]="ShellSpider V1"
