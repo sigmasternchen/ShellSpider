@@ -8,7 +8,7 @@ progname="server"
 
 help() {
 	cat << EOF
-usage: $progname --port=PORT
+usage: $progname [OPTIONS] --port=PORT
 
 Options:
   -p, --port=PORT      set port
@@ -56,7 +56,7 @@ declare -A settings
 settings[home]=$home
 settings[verbose]=$verboselevel
 settings[executeable]="sh php py cgi"
-settings[server]="server"
+settings[server]="ShellSpider V1"
 settings[index]="true"
 declare -p settings > $settingsfile
 
