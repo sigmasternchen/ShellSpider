@@ -142,7 +142,8 @@ elif $(isExecutable ${server[real_path]}); then
 	type="exec"
 else
 	status=200
-	responseHeaders['Content-Type']="$(file -b --mime-type ${server[real_path]})"
+	#responseHeaders['Content-Type']="$(file -b --mime-type ${server[real_path]})"
+	responseHeaders['Content-Type']="$(mimetype -b ${server[real_path]})"
 	content=$(cat ${server[real_path]})
 
 	type="static"
