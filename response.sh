@@ -40,7 +40,7 @@ fi
 
 placeholder() {
 	declare -A tokens
-	tokens[path]="${server[path]} (${server[real_path]})"
+	tokens[path]="${server[path]}"
 	tokens[host]="${headers[Host]}"
 	tokens[server]="${settings[server]}"
 
