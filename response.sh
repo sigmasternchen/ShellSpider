@@ -19,8 +19,8 @@ while true; do
 		break
 	fi
 	if test $first = 1; then
-		server[method]=$(echo "$header" | awk '{ print $1 }')
-		server[http]=$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')
+		server[method]="$(echo "$header" | awk '{ print $1 }')"
+		server[http]="$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')"
 		server[user_path]=$(echo "$header" | awk '{ print $2 }')
 		server[path]="$(realpath -sm "${server[user_path]}")"
 		server[query]="$(echo "${server[path]}" | awk -F? '{for (i=2; i<=NF; i++) print $i}')"
@@ -61,27 +61,27 @@ addStatusContainer() {
 	i=0
 	container="/dev/shm/st-cont-$$-";
 	while true; do
-		if test -f $container$i; then
+		if test -f "$container$i"; then
 			i=$(($i+1))
 			continue
 		fi
-		container=$container$i
+		container="$container$i"
 		break
 	done
-	touch $container
-	echo $container
+	touch "$container"
+	echo "$container"
 }
 removeStatusContainer() {
-	container=$1
-	rm $container
+	container="$1"
+	rm "$container"
 }
 
 isExecutable() {
-	path=$1
-	if test ! -x $path -o ! -f $path; then
+	path="$1"
+	if test ! -x "$path" -o ! -f "$path"; then
 		return 1
 	fi
-	ext="$(echo $path | awk -F. '{ print $NF }')"
+	ext="$(echo "$path" | awk -F. '{ print $NF }')"
 	for i in ${settings[executeable]}; do
 		if test "$ext" = "$i"; then
 			return 0
@@ -107,26 +107,26 @@ if test ! -e "${server[real_path]}"; then
 	content="$(placeholder < ./404.html)"
 
 	type="-"
-elif test ${settings[index]} = true -a -d "${server[real_path]}"; then
-	container=$(addStatusContainer)
-	content=$(./index.sh $baseSource $container "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
-	status=$(head -n 1 $container)
+elif test "${settings[index]}" = "true" -a -d "${server[real_path]}"; then
+	container="$(addStatusContainer)"
+	content="$(./index.sh "$baseSource" "$container" "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")"
+	status=$(head -n 1 "$container")
 	if test "$status" = ""; then
 		status=200
 	fi
 	while read line; do
-		responseHeaders[$(echo $line | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
-        done <<< $(tail -n 1 $container)
+		responseHeaders[$(echo "$line" | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
+        done <<< $(tail -n 1 "$container")
 
-	removeStatusContainer $container
+	removeStatusContainer "$container"
 
 	type="index"
-elif $(isExecutable ${server[real_path]}); then
-	container=$(addStatusContainer)
-	pushd "$(dirname ${server[real_path]})" > /dev/null
-	content=$(${server[real_path]} $baseSource $container "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
+elif $(isExecutable "${server[real_path]}"); then
+	container="$(addStatusContainer)"
+	pushd "$(dirname "${server[real_path]}")" > /dev/null
+	content=$("${server[real_path]}" "$baseSource" "$container" "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
 	popd > /dev/null
-	status=$(head -n 1 $container)
+	status=$(head -n 1 "$container")
 	if test "$status" = ""; then
 		status=200
 	fi
@@ -134,17 +134,17 @@ elif $(isExecutable ${server[real_path]}); then
 		if test "$(echo "$line" | grep ':')" = ""; then
 			continue
 		fi
-		responseHeaders[$(echo $line | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
-	done <<< $(tail -n 1 $container)
+		responseHeaders[$(echo "$line" | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
+	done <<< $(tail -n 1 "$container")
 	
-	removeStatusContainer $container
+	removeStatusContainer "$container"
 
 	type="exec"
 else
 	status=200
 	#responseHeaders['Content-Type']="$(file -b --mime-type ${server[real_path]})"
-	responseHeaders['Content-Type']="$(mimetype -b ${server[real_path]})"
-	content=$(cat ${server[real_path]})
+	responseHeaders['Content-Type']="$(mimetype -b "${server[real_path]}")"
+	content="$(cat ${server[real_path]})"
 
 	type="static"
 fi

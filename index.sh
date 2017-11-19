@@ -30,7 +30,7 @@ cat <<EOF
 			</tr>
 EOF
 
-for file in $(ls -a ${server[real_path]}); do
+for file in $(ls -a "${server[real_path]}"); do
 	if test "$file" = ".." -a "${server[path]}" = "/"; then
 		continue;
 	fi
@@ -40,13 +40,13 @@ for file in $(ls -a ${server[real_path]}); do
 			<a href="$(realpath -sm "${server[path]}/$file")">$file</a>
 		</td>
 		<td>
-			$(file -b ${server[real_path]}/$file)
+			$(file -b "${server[real_path]}/$file")
 		</td>
 		<td>
-			$(if test ! -d ${server[real_path]}/$file; then if test -x ${server[real_path]}/$file; then echo yes; else echo no; fi; fi)
+			$(if test ! -d "${server[real_path]}/$file"; then if test -x "${server[real_path]}/$file"; then echo yes; else echo no; fi; fi)
 		</td>
 		<td>
-			$(if test ! -d ${server[real_path]}/$file; then du -kh ${server[real_path]}/$file | cut -f1; fi)
+			$(if test ! -d "${server[real_path]}/$file"; then du -kh "${server[real_path]}/$file" | cut -f1; fi)
 		</td>
 	</tr>
 EOF

@@ -27,15 +27,15 @@ fi
 name=""
 text=""
 
-fields=$(echo ${server[query]} | tr "&" "\n")
+fields=$(echo "${server[query]}" | tr "&" "\n")
 for field in $fields; do
-	key=$(echo $field | awk -F= '{ print $1 }')
-	value=$(echo $field | awk -F= '{for (i=2; i<=NF; i++) print $i}')
+	key=$(echo "$field" | awk -F= '{ print $1 }')
+	value=$(echo "$field" | awk -F= '{for (i=2; i<=NF; i++) print $i}')
 
 	if test "$key" = "name"; then
-		name=$value
+		name="$value"
 	elif test "$key" = "text"; then
-		text=$value
+		text="$value"
 	fi
 done
 
