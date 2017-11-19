@@ -23,6 +23,12 @@ for key in "${!server[@]}"; do
 	echo "$key -> ${server[$key]}<br />"
 done
 cat <<EOF
+		<h1>Query</h1>
+EOF
+for key in "${!query[@]}"; do
+	echo "$key -> ${query[$key]}<br />"
+done
+cat <<EOF
 		<h1>Headers</h1>
 EOF
 for key in "${!headers[@]}"; do
