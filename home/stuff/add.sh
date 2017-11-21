@@ -2,7 +2,7 @@
 
 . $1
 
-if test "${server[query]}" == ""; then
+if test "${server[queryString]}" == ""; then
 	setStatusCode 200
 
 	cat<<EOF
@@ -27,7 +27,7 @@ fi
 name=""
 text=""
 
-fields=$(echo "${server[query]}" | tr "&" "\n")
+fields=$(echo "${server[queryString]}" | tr "&" "\n")
 for field in $fields; do
 	key=$(echo "$field" | awk -F= '{ print $1 }')
 	value=$(echo "$field" | awk -F= '{for (i=2; i<=NF; i++) print $i}')

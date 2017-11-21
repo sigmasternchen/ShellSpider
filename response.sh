@@ -8,8 +8,16 @@ eval "$(cat $settingsfile)" # declare settings array
 declare -A server
 server[remoteAddress]="$SOCAT_PEERADDR"
 server[remotePort]="$SOCAT_PEERPORT"
-server[localAddress]="$SOCAT_SOCKADDR"
-server[localPort]="$SOCAT_SOCKPORT"
+server[remoteHost]="$(dig +noall +answer -x $SOCAT_PEERADDR | awk '{ print $5 }')"
+server[serverAddress]="$SOCAT_SOCKADDR"
+server[serverPort]="$SOCAT_SOCKPORT"
+server[serverName]="${settings[name]}"
+server[serverAdmin]="${settings[admin]}"
+server[serverSoftware]="${settings[server]}"
+server[documentRoot]="$(realpath "${settings[home]}")"
+server[requestTime]="$(date +%s)"
+server[requestTimeFloat]="$(($(date +%s%N)/1000))"
+server[requestTimeReadable]="$(date --rfc-3339=ns)"
 
 declare -A headers
 first=1
@@ -19,13 +27,15 @@ while true; do
 		break
 	fi
 	if test $first = 1; then
-		server[method]="$(echo "$header" | awk '{ print $1 }')"
+		server[requestMethod]="$(echo "$header" | awk '{ print $1 }')"
 		server[http]="$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')"
-		server[user_path]=$(echo "$header" | awk '{ print $2 }')
-		server[path]="$(realpath -sm "${server[user_path]}")"
-		server[query]="$(echo "${server[path]}" | awk -F? '{for (i=2; i<=NF; i++) print $i}')"
-		server[path]="$(echo "${server[path]}" | awk -F? '{ print $1 }')"
-		server[real_path]="$(realpath -sm "${settings[home]}${server[path]}")"
+		server[https]="off"
+		server[serverProtocol]="$(echo "$header" | awk '{ print $3 }')"
+		server[request_unchecked]=$(echo "$header" | awk '{ print $2 }')
+		server[requestURI]="$(realpath -sm "${server[request_unchecked]}")"
+		server[queryString]="$(echo "${server[requestURI]}" | awk -F? '{for (i=2; i<=NF; i++) print $i}')"
+		server[scriptName]="$(echo "${server[requestURI]}" | awk -F? '{ print $1 }')"
+		server[scriptFilename]="$(realpath -sm "${settings[home]}${server[scriptName]}")"
 		first=0
 		continue
 	fi
@@ -38,11 +48,30 @@ if test "$first" = 1; then
 	exit 1
 fi
 
+server[httpAccept]="${headers[Accept]}"
+server[httpAcceptCharset]="${headers[Accept-Charset]}"
+server[httpAcceptEncoding]="${headers[Accept-Encoding]}"
+server[httpAcceptLanguage]="${headers[Accept-Language]}"
+server[httpConnection]="${headers[Accept-Connection]}"
+server[httpHost]="${headers[Host]}"
+server[httpReferer]="${headers[Referer]}"
+server[httpUserAgent]="${headers[User-Agent]}"
+
+server[remoteUser]="" # TODO not implemented
+server[redirectRemoteUser]="" # TODO not implemented
+server[authType]="" # TODO not implemented
+
+server[serverSignature]=""
+if true; then # TODO add condition setting
+	server[serverSignature]="${server[httpHost]} (${server[serverSoftware]})"
+fi
+
 placeholder() {
 	declare -A tokens
-	tokens[path]="${server[path]}"
-	tokens[host]="${headers[Host]}"
-	tokens[server]="${settings[server]}"
+	tokens[path]="${server[scriptName]}"
+	tokens[host]="${server[httpHost]}"
+	tokens[server]="${server[serverSoftware]}"
+	tokens[signature]="${server[serverSignature]}"
 
 	text="$(cat)"
 
@@ -76,13 +105,41 @@ removeStatusContainer() {
 	rm "$container"
 }
 
-isExecutable() {
+isExecutableShell() {
 	path="$1"
 	if test ! -x "$path" -o ! -f "$path"; then
 		return 1
 	fi
 	ext="$(echo "$path" | awk -F. '{ print $NF }')"
-	for i in ${settings[executeable]}; do
+	for i in ${settings[shellExec]}; do
+		if test "$ext" = "$i"; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+isExecutableCGI() {
+	path="$1"
+	if test ! -x "$path" -o ! -f "$path"; then
+		return 1
+	fi
+	ext="$(echo "$path" | awk -F. '{ print $NF }')"
+	for i in ${settings[cgiExec]}; do
+		if test "$ext" = "$i"; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+isExecutablePHP() {
+	path="$1"
+	if test ! -x "$path" -o ! -f "$path"; then
+		return 1
+	fi
+	ext="$(echo "$path" | awk -F. '{ print $NF }')"
+	for i in ${settings[phpExec]}; do
 		if test "$ext" = "$i"; then
 			return 0
 		fi
@@ -101,13 +158,13 @@ responseHeaders[Connection]="max=1"
 
 type=""
 
-if test ! -e "${server[real_path]}"; then
+if test ! -e "${server[scriptFilename]}"; then
 	status=404
 
 	content="$(placeholder < ./404.html)"
 
 	type="-"
-elif test "${settings[index]}" = "true" -a -d "${server[real_path]}"; then
+elif test "${settings[index]}" = "true" -a -d "${server[scriptFilename]}"; then
 	container="$(addStatusContainer)"
 	content="$(./index.sh "$baseSource" "$container" "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")"
 	status=$(head -n 1 "$container")
@@ -121,10 +178,10 @@ elif test "${settings[index]}" = "true" -a -d "${server[real_path]}"; then
 	removeStatusContainer "$container"
 
 	type="index"
-elif $(isExecutable "${server[real_path]}"); then
+elif isExecutableShell "${server[scriptFilename]}"; then
 	container="$(addStatusContainer)"
-	pushd "$(dirname "${server[real_path]}")" > /dev/null
-	content=$("${server[real_path]}" "$baseSource" "$container" "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
+	pushd "$(dirname "${server[scriptFilename]}")" > /dev/null
+	content=$("${server[scriptFilename]}" "$baseSource" "$container" "$(declare -p settings)" "$(declare -p server)" "$(declare -p headers)")
 	popd > /dev/null
 	status=$(head -n 1 "$container")
 	if test "$status" = ""; then
@@ -139,12 +196,67 @@ elif $(isExecutable "${server[real_path]}"); then
 	
 	removeStatusContainer "$container"
 
-	type="exec"
+	type="shell"
+elif isExecutableCGI "${server[scriptFilename]}"; then
+	content=""
+	status=200
+	headerDone=0
+	while read line; do
+		if test $headerDone = 1; then
+			content="${content}${line}"$'\n'
+			continue
+		fi
+		if test "$(echo "$line" | grep ':')" = ""; then
+			headerDone=1
+			continue
+		fi
+		if test "$(echo "$line" | awk -F: '{print $1}')" = "Status"; then
+			status="$(echo "$line" | awk '{print $2}')"
+			continue
+		fi
+		responseHeaders[$(echo "$line" | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
+	done <<< $( # open subshell
+		export GATEWAY_INTERFACE="CGI/1.1"
+
+		export AUTH_TYPE="${server[authType]}"
+		export DOCUMENT_ROOT="${server[documentRoot]}"
+		export HTTP_ACCEPT_CHARSET="${server[httpAcceptCharset]}"
+		export HTTP_ACCEPT_ENCODING="${server[httpAcceptEncoding]}"
+		export HTTP_ACCEPT_LANGUAGE="${server[httpAcceptLanguage]}"
+		export HTTP_ACCEPT="${server[httpAccept]}"
+		export HTTP_CONNECTION="${server[httpConnection]}"
+		export HTTP_HOST="${server[httpHost]}"
+		export HTTPS="${server[https]}"
+		export HTTP_USER_AGENT="${server[httpUserAgent]}"
+		export QUERY_STRING="${server[queryString]}"
+		export REDIRECT_REMOTE_USER="${server[redirectRemoteUser]}"
+		export REMOTE_ADDR="${server[remoteAddress]}"
+		export REMOTE_HOST="${server[remoteHost]}"
+		export REMOTE_PORT="${server[remotePort]}"
+		export REMOTE_USER="${server[remoteUser]}"
+		export REQUEST_METHOD="${server[requestMethod]}"
+		export REQUEST_TIME_FLOAT="${server[requestTimeFloat]}"
+		export REQUEST_TIME="${server[requestTime]}"
+		export REQUEST_URI="${server[requestURI]}"
+		export SCRIPT_FILENAME="${server[scriptFilename]}"
+		export SCRIPT_NAME="${server[scriptName]}"
+		export SERVER_ADDR="${server[serverAddress]}"
+		export SERVER_ADMIN="${server[serverAdmin]}"
+		export SERVER_NAME="${server[serverName]}"
+		export SERVER_PORT="${server[serverPort]}"
+		export SERVER_PROTOCOL="${server[serverProtocol]}"
+		export SERVER_SIGNATURE="${server[serverSignature]}"
+		export SERVER_SOFTWARE="${server[serverSoftware]}"
+
+		${server[scriptFilename]}
+	)
+
+	type="cgi"
 else
 	status=200
-	#responseHeaders['Content-Type']="$(file -b --mime-type ${server[real_path]})"
-	responseHeaders['Content-Type']="$(mimetype -b "${server[real_path]}")"
-	content="$(cat ${server[real_path]})"
+	#responseHeaders['Content-Type']="$(file -b --mime-type ${server[scriptFilename]})"
+	responseHeaders['Content-Type']="$(mimetype -b "${server[scriptFilename]}")"
+	content="$(cat ${server[scriptFilename]})"
 
 	type="static"
 fi
@@ -152,13 +264,14 @@ fi
 length=$(printf "%s" "$content" | wc -c)
 
 if test "${settings[verbose]}" -ge "0"; then
-	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - ${headers[Host]}${server[path]} - $type - $status - $length bytes" 1>&2
+	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - ${headers[Host]}${server[queryURI]} - $type - $status - $length bytes" 1>&2
 fi
 
 echo -en "HTTP/1.1 $status $(./statusString.sh $status)\r\n"
 echo -en "Content-Length: $length\r\n"
 for key in ${!responseHeaders[@]}; do
-	echo -en "$(urlencode "$key"): $(urlencode "${responseHeaders[$key]}")\r\n"
+	#echo -en "$(urlencode "$key"): $(urlencode "${responseHeaders[$key]}")\r\n"
+	echo -en "$key: ${responseHeaders[$key]}\r\n"
 done
 echo -en "\r\n"
 printf "%s" "$content"

@@ -27,7 +27,7 @@ echoOnVerbose() {
 
 progname="$0"
 
-OPTS=$(getopt -o "p:vqh:" -l "port:,verbose,quiet,home:" -- $@)
+OPTS=$(getopt -o "p:vqh:n:" -l "port:,verbose,quiet,home:,name:admin:" -- $@)
 if test $? != 0; then
 	exit $EXIT_FAILURE
 fi
@@ -35,6 +35,8 @@ fi
 eval set -- "$OPTS"
 
 home="./home/"
+name="localhost"
+admin="admin@localhost"
 
 while true; do
 	case "$1" in
@@ -42,6 +44,8 @@ while true; do
 		-v|--verbose) verboselevel=$(($verboselevel+1)); shift;;
 		-q|--quiet) verboselevel=-1; shift;;
 		-h|--home) home=$2; shift 2;;
+		-n|--name) name=$2; shift 2;;
+		--admin) admin=$2; shift 2;;
 		--) shift; break;;
 	esac
 done
@@ -55,8 +59,12 @@ settingsfile="/dev/shm/wserver-$$"
 declare -A settings
 settings[serverDirectory]="$(pwd)"
 settings[home]="$home"
+settings[name]="$name"
+settings[admin]="$admin"
 settings[verbose]=$verboselevel
-settings[executeable]="sh php py cgi"
+settings[shellExec]="sh"
+settings[cgiExec]="cgi"
+settings[phpExec]="php"
 settings[server]="ShellSpider V1"
 settings[index]="true"
 declare -p settings > $settingsfile

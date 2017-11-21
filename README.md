@@ -10,6 +10,7 @@ Requirements
 - an up-to-date version of bash
 - socat (for networking)
 - python (for url-encoding)
+- dig (for reverse lookup)
 - some other basic tools, like sed, grep, awk, getopt
 
 Usage
