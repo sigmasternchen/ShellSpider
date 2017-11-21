@@ -24,20 +24,8 @@ EOF
 	exit 
 fi
 
-name=""
-text=""
-
-fields=$(echo "${server[queryString]}" | tr "&" "\n")
-for field in $fields; do
-	key=$(echo "$field" | awk -F= '{ print $1 }')
-	value=$(echo "$field" | awk -F= '{for (i=2; i<=NF; i++) print $i}')
-
-	if test "$key" = "name"; then
-		name="$value"
-	elif test "$key" = "text"; then
-		text="$value"
-	fi
-done
+name="${query["name"]}"
+text="${query["text"]}"
 
 if test "$name" = "" -o "$text" = ""; then
 	setStatusCode 400
@@ -46,9 +34,9 @@ fi
 
 cat >> ./guestbook.txt <<EOF
 ===============================
-$(date): $(urldecode "$name")
+$(date): $name
 
-$(urldecode "$text")
+$text
 
 EOF
 
