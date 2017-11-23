@@ -147,6 +147,43 @@ isExecutablePHP() {
 	return 1
 }
 
+cgiExec() {
+	export GATEWAY_INTERFACE="CGI/1.1"
+
+	export AUTH_TYPE="${server[authType]}"
+	export DOCUMENT_ROOT="${server[documentRoot]}"
+	export HTTP_ACCEPT_CHARSET="${server[httpAcceptCharset]}"
+	export HTTP_ACCEPT_ENCODING="${server[httpAcceptEncoding]}"
+	export HTTP_ACCEPT_LANGUAGE="${server[httpAcceptLanguage]}"
+	export HTTP_ACCEPT="${server[httpAccept]}"
+	export HTTP_CONNECTION="${server[httpConnection]}"
+	export HTTP_HOST="${server[httpHost]}"
+	export HTTPS="${server[https]}"
+	export HTTP_USER_AGENT="${server[httpUserAgent]}"
+	export QUERY_STRING="${server[queryString]}"
+	export REDIRECT_REMOTE_USER="${server[redirectRemoteUser]}"
+	export REMOTE_ADDR="${server[remoteAddress]}"
+	export REMOTE_HOST="${server[remoteHost]}"
+	export REMOTE_PORT="${server[remotePort]}"
+	export REMOTE_USER="${server[remoteUser]}"
+	export REQUEST_METHOD="${server[requestMethod]}"
+	export REQUEST_TIME_FLOAT="${server[requestTimeFloat]}"
+	export REQUEST_TIME="${server[requestTime]}"
+	export REQUEST_URI="${server[requestURI]}"
+	export SCRIPT_FILENAME="${server[scriptFilename]}"
+	export SCRIPT_NAME="${server[scriptName]}"
+	export SERVER_ADDR="${server[serverAddress]}"
+	export SERVER_ADMIN="${server[serverAdmin]}"
+	export SERVER_NAME="${server[serverName]}"
+	export SERVER_PORT="${server[serverPort]}"
+	export SERVER_PROTOCOL="${server[serverProtocol]}"
+	export SERVER_SIGNATURE="${server[serverSignature]}"
+	export SERVER_SOFTWARE="${server[serverSoftware]}"
+
+	"$1"
+}
+	
+
 baseSource="$(pwd)/base.source.sh"
 
 status=500
@@ -216,42 +253,35 @@ elif isExecutableCGI "${server[scriptFilename]}"; then
 		fi
 		responseHeaders[$(echo "$line" | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
 	done <<< $( # open subshell
-		export GATEWAY_INTERFACE="CGI/1.1"
-
-		export AUTH_TYPE="${server[authType]}"
-		export DOCUMENT_ROOT="${server[documentRoot]}"
-		export HTTP_ACCEPT_CHARSET="${server[httpAcceptCharset]}"
-		export HTTP_ACCEPT_ENCODING="${server[httpAcceptEncoding]}"
-		export HTTP_ACCEPT_LANGUAGE="${server[httpAcceptLanguage]}"
-		export HTTP_ACCEPT="${server[httpAccept]}"
-		export HTTP_CONNECTION="${server[httpConnection]}"
-		export HTTP_HOST="${server[httpHost]}"
-		export HTTPS="${server[https]}"
-		export HTTP_USER_AGENT="${server[httpUserAgent]}"
-		export QUERY_STRING="${server[queryString]}"
-		export REDIRECT_REMOTE_USER="${server[redirectRemoteUser]}"
-		export REMOTE_ADDR="${server[remoteAddress]}"
-		export REMOTE_HOST="${server[remoteHost]}"
-		export REMOTE_PORT="${server[remotePort]}"
-		export REMOTE_USER="${server[remoteUser]}"
-		export REQUEST_METHOD="${server[requestMethod]}"
-		export REQUEST_TIME_FLOAT="${server[requestTimeFloat]}"
-		export REQUEST_TIME="${server[requestTime]}"
-		export REQUEST_URI="${server[requestURI]}"
-		export SCRIPT_FILENAME="${server[scriptFilename]}"
-		export SCRIPT_NAME="${server[scriptName]}"
-		export SERVER_ADDR="${server[serverAddress]}"
-		export SERVER_ADMIN="${server[serverAdmin]}"
-		export SERVER_NAME="${server[serverName]}"
-		export SERVER_PORT="${server[serverPort]}"
-		export SERVER_PROTOCOL="${server[serverProtocol]}"
-		export SERVER_SIGNATURE="${server[serverSignature]}"
-		export SERVER_SOFTWARE="${server[serverSoftware]}"
-
-		${server[scriptFilename]}
+		cgiExec "${server[scriptFilename]}"
 	)
 
 	type="cgi"
+elif isExecutablePHP "${server[scriptFilename]}"; then
+	content=""
+	status=200
+	headerDone=0
+	while read line; do
+		if test $headerDone = 1; then
+			content="${content}${line}"$'\n'
+			continue
+		fi
+		if test "$(echo "$line" | grep ':')" = ""; then
+			headerDone=1
+			continue
+		fi
+		if test "$(echo "$line" | awk -F: '{print $1}')" = "Status"; then
+			status="$(echo "$line" | awk '{print $2}')"
+			continue
+		fi
+		responseHeaders[$(echo "$line" | awk -F: '{ print $1 }')]="$(echo "$line" | awk '{for (i=2; i<=NF; i++) print $i}')"
+	done <<< $( # open subshell
+		export REDIRECT_STATUS=1
+		cgiExec php-cgi -f "${server[scriptFilename]}"
+	)
+
+	type="php"
+
 else
 	status=200
 	#responseHeaders['Content-Type']="$(file -b --mime-type ${server[scriptFilename]})"
