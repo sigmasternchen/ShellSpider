@@ -19,6 +19,38 @@ server[requestTime]="$(date +%s)"
 server[requestTimeFloat]="$(($(date +%s%N)/1000))"
 server[requestTimeReadable]="$(date --rfc-3339=ns)"
 
+requestTimeout() {
+	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - Error: request timeout" 1>&2
+	
+	content="408 Request Timeout
+The client did not produce a request within the time that the server was prepared to wait. The client MAY repeat the request without modifications at any later time
+"
+	status=408
+
+	length=$(printf "%s" "$content" | wc -c)
+
+	echo -en "HTTP/1.1 $status $(./statusString.sh $status)\r\n"
+	echo -en "Content-Length: $length\r\n"
+	echo -en "Content-Type: text/plain\r\n"
+	echo -en "\r\n"
+	printf "%s" "$content"
+
+	exit 1
+}
+
+trap requestTimeout SIGUSR1
+
+headerTimeout=10
+set +bm
+headerTimer() {
+	pid=$1
+	timeout=$2
+	sleep $2
+	kill -USR1 $pid
+}
+headerTimer $$ $headerTimeout &
+headerTimerPid=$!
+
 declare -A headers
 first=1
 while true; do
@@ -41,6 +73,9 @@ while true; do
 	fi
 	headers[$(echo $header | awk -F: '{ print $1}')]="$(echo "$header" | awk '{for (i=2; i<=NF; i++) print $i}')"
 done
+
+kill -TERM $headerTimerPid 
+wait $headerTimerPid 2> /dev/null
 
 if test "$first" = 1; then
 	# wut?
