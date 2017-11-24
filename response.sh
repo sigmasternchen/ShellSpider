@@ -1,6 +1,8 @@
 #!/bin/bash
 
-settingsfile=$1
+ssl="$2"
+
+settingsfile="$1"
 eval "$(cat $settingsfile)" # declare settings array
 
 . misc.sh
@@ -61,7 +63,7 @@ while true; do
 	if test $first = 1; then
 		server[requestMethod]="$(echo "$header" | awk '{ print $1 }')"
 		server[http]="$(echo "$header" | awk '{ print $3 }' | awk -F/ '{ print $2} ')"
-		server[https]="off"
+		server[https]="$ssl"
 		server[serverProtocol]="$(echo "$header" | awk '{ print $3 }')"
 		server[request_unchecked]=$(echo "$header" | awk '{ print $2 }')
 		server[requestURI]="$(realpath -sm "${server[request_unchecked]}")"
@@ -329,7 +331,7 @@ fi
 length=$(printf "%s" "$content" | wc -c)
 
 if test "${settings[verbose]}" -ge "0"; then
-	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - ${headers[Host]}${server[queryURI]} - $type - $status - $length bytes" 1>&2
+	echo "$(date --rfc-3339=ns) - ${server[remoteAddress]}:${server[remotePort]} - ${headers[Host]}${server[requestURI]} - $type - $status - $length bytes" 1>&2
 fi
 
 echo -en "HTTP/1.1 $status $(./statusString.sh $status)\r\n"
